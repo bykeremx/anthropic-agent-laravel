@@ -2,6 +2,8 @@
 
 Laravel ve Anthropic Claude ile geliştirilmiş, Türkçe konuşan bir e-ticaret müşteri hizmetleri asistanı. Kullanıcı sohbet ekranına doğal dilde soru yazar; model gerektiğinde veritabanını **tool use (function calling)** ile sorgular ve gerçek veriye dayanan bir cevap üretir.
 
+![Sohbet ekranı: sipariş durumu ve müşteri siparişleri sorgusu](.github/images/chat-screenshot.png)
+
 ```
 "ORD-1003 siparişinin durumu ne?"
         → model get_order_status aracını çağırır
