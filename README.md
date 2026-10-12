@@ -1,6 +1,12 @@
-# exampleai — AI Müşteri Hizmetleri Asistanı
+<p align="right"><b>Türkçe</b> · <a href="README.en.md">English</a></p>
 
-Laravel ve Anthropic Claude ile geliştirilmiş, Türkçe konuşan bir e-ticaret müşteri hizmetleri asistanı. Kullanıcı sohbet ekranına doğal dilde soru yazar; model gerektiğinde veritabanını **tool use (function calling)** ile sorgular ve gerçek veriye dayanan bir cevap üretir.
+# Sipariş Asistanı
+
+> Laravel ve Anthropic Claude ile geliştirilmiş, Türkçe konuşan müşteri hizmetleri asistanı.
+
+[![Tests](https://github.com/bykeremx/anthropic-agent-laravel/actions/workflows/tests.yml/badge.svg)](https://github.com/bykeremx/anthropic-agent-laravel/actions/workflows/tests.yml)
+
+Kullanıcı sohbet ekranına doğal dilde soru yazar. Model gerektiğinde veritabanını **tool use (function calling)** ile sorgular ve gerçek veriye dayanan bir cevap üretir.
 
 ![Sohbet ekranı: sipariş durumu ve müşteri siparişleri sorgusu](.github/images/chat-screenshot.png)
 
@@ -61,8 +67,8 @@ AiClient::send() ──► Anthropic Messages API
 ## Kurulum
 
 ```bash
-git clone <repo-url> exampleai
-cd exampleai
+git clone https://github.com/bykeremx/anthropic-agent-laravel.git
+cd anthropic-agent-laravel
 
 composer install
 cp .env.example .env
@@ -92,7 +98,7 @@ npm run build
 
 ## Çalıştırma
 
-- **Laravel Herd:** Proje otomatik olarak `http://exampleai.test` adresinde yayındadır.
+- **Laravel Herd:** Proje klasör adıyla otomatik olarak yayınlanır (ör. `http://anthropic-agent-laravel.test`).
 - **Herd olmadan:** `composer run dev` (sunucu, queue ve Vite birlikte çalışır) veya `php artisan serve`.
 
 Asistan sayfası: **`/ai/agent`**
