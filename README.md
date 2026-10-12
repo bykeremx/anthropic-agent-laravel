@@ -1,58 +1,158 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# exampleai — AI Müşteri Hizmetleri Asistanı
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Laravel ve Anthropic Claude ile geliştirilmiş, Türkçe konuşan bir e-ticaret müşteri hizmetleri asistanı. Kullanıcı sohbet ekranına doğal dilde soru yazar; model gerektiğinde veritabanını **tool use (function calling)** ile sorgular ve gerçek veriye dayanan bir cevap üretir.
 
-## About Laravel
-
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
-
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```
+"ORD-1003 siparişinin durumu ne?"
+        → model get_order_status aracını çağırır
+        → Laravel siparişi veritabanından okur
+        → "ORD-1003 numaralı sipariş beklemede, tutarı 3.200,00 TL."
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+## Özellikler
 
-## Contributing
+- **Ajan döngüsü:** Model tool ister → uygulama çalıştırır → sonuç modele geri beslenir; en fazla 5 tur.
+- **İki tool:**
+  - `get_customer_orders` — isim/soyisim ile müşteri arar (en fazla 5 eşleşme), siparişleri ve iptaller hariç toplam harcamayı döner.
+  - `get_order_status` — sipariş numarasıyla tek siparişi getirir (`1003`, `ord-1003` gibi girdileri `ORD-1003`'e tamamlar).
+- **Güvenli tool çağrısı:** Model yalnızca `ToolSchema`'da tanımlı tool'ları çalıştırabilir.
+- **Ek SDK yok:** Anthropic Messages API'ye Laravel `Http` istemcisiyle doğrudan istek atılır.
+- **Hata yönetimi:** API hataları 502, beklenmeyen hatalar 500 olarak döner ve loglanır; kullanıcıya iç detay gösterilmez.
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## Mimari
 
-## Code of Conduct
+```
+Tarayıcı (x-ai.chat)
+   │  POST /ai/agent/send  {message}
+   ▼
+AgentController ── doğrulama (required|string|max:2000)
+   │
+   ▼
+AiAgent::run() ─────────────► ToolSchema::all()   (modele sunulan tool tanımları)
+   │   ▲
+   │   │ tool_result
+   ▼   │
+AiClient::send() ──► Anthropic Messages API
+   │
+   │ stop_reason == tool_use ?
+   ├── evet ──► ToolsService::call() ──► Eloquent (customers, orders)
+   └── hayır ─► AiAgent::text() ──► {"reply": "..."}
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+| Dosya | Görevi |
+|---|---|
+| `app/Http/Controllers/Ai/AgentController.php` | HTTP girişi: doğrular, ajanı çalıştırır, hatayı/cevabı JSON'a çevirir |
+| `app/Services/Ai/AiAgent.php` | Orkestratör: system prompt, tool listesi, sınırlı tool-use döngüsü |
+| `app/Services/Ai/AiClient.php` | Anthropic Messages API'ye tek HTTP çağrısı |
+| `app/Services/Ai/ToolsService.php` | Tool uygulamaları (Eloquent sorguları, whitelist kontrolü) |
+| `app/Schema/ToolSchema.php` | Modele gösterilen tool tanımları (ad, açıklama, JSON Schema) |
+| `resources/views/components/ai/chat.blade.php` | Sohbet arayüzü |
 
-## Security Vulnerabilities
+## Gereksinimler
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+- PHP **8.4+** (`composer.lock` 8.4 gerektirir)
+- Composer
+- Node.js ve npm (arayüz asset'leri için)
+- SQLite (varsayılan) veya Laravel'in desteklediği başka bir veritabanı
+- Bir [Anthropic API anahtarı](https://console.anthropic.com/)
 
-## License
+## Kurulum
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```bash
+git clone <repo-url> exampleai
+cd exampleai
+
+composer install
+cp .env.example .env
+php artisan key:generate
+```
+
+`.env` dosyasına Anthropic bilgilerini ekleyin:
+
+```dotenv
+ANTHROPIC_API_KEY=sk-ant-...
+ANTHROPIC_MODEL=claude-haiku-5-5
+```
+
+Veritabanını oluşturup örnek verilerle doldurun (30 müşteri, 100 sipariş):
+
+```bash
+touch database/database.sqlite      # SQLite kullanıyorsanız
+php artisan migrate --seed
+```
+
+Arayüz asset'lerini derleyin:
+
+```bash
+npm install
+npm run build
+```
+
+## Çalıştırma
+
+- **Laravel Herd:** Proje otomatik olarak `http://exampleai.test` adresinde yayındadır.
+- **Herd olmadan:** `composer run dev` (sunucu, queue ve Vite birlikte çalışır) veya `php artisan serve`.
+
+Asistan sayfası: **`/ai/agent`**
+
+Seed verisiyle deneyebileceğiniz örnek sorular:
+
+- `Ahmet Yılmaz'ın siparişleri neler?`
+- `ORD-1003 siparişinin durumu ne?`
+- `Ayşe Demir toplam ne kadar harcamış?`
+- `Mehmet isimli müşterilerin siparişlerini listele.`
+
+## Uç noktalar
+
+| Metot | URL | Route adı | Açıklama |
+|---|---|---|---|
+| GET | `/ai/agent` | `ai.agent` | Sohbet sayfası |
+| POST | `/ai/agent/send` | `ai.send` | Mesaj gönderir (`{"message": "..."}`) |
+
+Yanıtlar:
+
+| Durum | Gövde |
+|---|---|
+| 200 | `{"reply": "..."}` |
+| 422 | Doğrulama hatası (`{"message": "...", "errors": {...}}`) |
+| 502 | `{"message": "AI servisine ulaşılamadı. Lütfen tekrar dene."}` |
+| 500 | `{"message": "Beklenmeyen bir hata oluştu."}` |
+
+> POST isteği `web` middleware grubundadır; `X-CSRF-TOKEN` header'ı gerekir.
+
+## Testler
+
+Testler [Pest](https://pestphp.com) ile yazılmıştır. Anthropic API'si `Http::fake()` ile taklit edilir; **testler için API anahtarı gerekmez ve hiçbir istek internete çıkmaz.**
+
+```bash
+php artisan test
+```
+
+| Test dosyası | Kapsam |
+|---|---|
+| `tests/Feature/Http/Controllers/Ai/AgentControllerTest.php` | Sayfa, doğrulama, başarılı cevap, 502/500 hata dalları |
+| `tests/Feature/Services/Ai/AiAgentTest.php` | Ajan döngüsü, tool_result eşleşmesi, paralel tool'lar, 5 adım sınırı |
+| `tests/Feature/Services/Ai/AiClientTest.php` | Header'lar, payload, hata durumunda exception |
+| `tests/Feature/Services/Ai/ToolsServiceTest.php` | Müşteri/sipariş sorguları, normalizasyon, whitelist |
+| `tests/Unit/Schema/ToolSchemaTest.php` | Her tool tanımının bir `ToolsService` metoduna karşılık gelmesi |
+
+### Sürekli entegrasyon
+
+`.github/workflows/tests.yml`, `main`/`master` dalına her push'ta ve her Pull Request'te testleri PHP 8.4 üzerinde çalıştırır. GitHub'da **Actions → Tests → Run workflow** ile elle de başlatılabilir. Herhangi bir secret tanımlamanız gerekmez.
+
+## Yeni bir tool eklemek
+
+1. `app/Schema/ToolSchema.php` içindeki `all()` dizisine yeni tanımı ekleyin: `name`, ne zaman kullanılacağını (ve kullanılmayacağını) anlatan bir `description` ve `input_schema`.
+2. `app/Services/Ai/ToolsService.php` içine **aynı isimde** public bir metot ekleyin. Metot `array $input` almalı ve `['status' => 'success', ...]` ya da `['status' => 'error', 'message' => '...']` döndürmelidir.
+3. Gerekirse `AiAgent` içindeki system prompt'a tool ile ilgili davranış kuralı ekleyin.
+4. `ToolsServiceTest.php` dosyasına testlerini yazın. `ToolSchemaTest`, tanımla metodun eşleştiğini otomatik olarak kontrol eder.
+
+## Bilinen sınırlamalar
+
+- Sohbet geçmişi tutulmaz; her mesaj bağımsız olarak işlenir.
+- AI uç noktalarında kimlik doğrulama ve rate limiting yoktur. Canlıya almadan önce `auth` ve `throttle` middleware'leri eklenmelidir.
+- Müşteri adı, e-posta, şehir ve sipariş bilgileri Anthropic API'sine gönderilir; KVKK açısından değerlendirilmelidir.
+
+## Lisans
+
+[MIT](https://opensource.org/licenses/MIT)
